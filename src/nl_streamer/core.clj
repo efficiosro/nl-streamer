@@ -3,7 +3,7 @@
             [cheshire.core :as json]
             [nl-streamer.utils :as u]
             [nl-streamer.serial-port :as sp]
-            [nl-streamer.neurosky-reader :as nsky])
+            [nl-streamer.neurosky :as nsky])
   (:use [clojure.string :only [join]]
         [clojure.java.io :only [as-file]])
   (:gen-class))

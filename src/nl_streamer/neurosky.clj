@@ -1,4 +1,4 @@
-(ns nl-streamer.neurosky-reader
+(ns nl-streamer.neurosky
   (:require [clojure.java.io :as io]
             [nl-streamer.serial-port :as sp]
             [nl-streamer.utils :as u]
