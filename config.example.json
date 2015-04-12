@@ -1,0 +1,7 @@
+{
+  "protocol": "http",
+  "host": "neurolyzer.herokuapp.com",
+  "profile-id": 1,
+  "exercise-id": 1,
+  "token": "REPLACE_WITH_YOUR_TOKEN"
+}
