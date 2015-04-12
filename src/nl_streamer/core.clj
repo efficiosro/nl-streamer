@@ -23,7 +23,7 @@
         "It connects to the EEG device and stream its data to the server."
         ""
         "Usage:"
-        "  $ java -jar nl-streamer command [options]"
+        "  $ nl-streamer [command] [options]"
         ""
         "Options:"
         opts-summary
