@@ -49,6 +49,10 @@
 
 (def ^:private bytes-stream (atom clojure.lang.PersistentQueue/EMPTY))
 (def ^:private stats (atom {}))
+(def ^:private neurosky-device (atom {}))
+
+(defn get-connection-status []
+  (if (seq @neurosky-device) :connected :disconnected))
 
 (defn- conjv [coll & items]
   (apply conj (vec coll) items))
@@ -212,18 +216,14 @@
    (reset! stats {})
    (let [port (sp/open path baud-rate)
          _ (sp/write-int port (int 2)) ;; set baud rate to 57.6k
-         listener (doto (Thread. process-bytes-stream) (.start))]
+         listener (doto (Thread. process-bytes-stream) (.start))
+         device {:port port :listener listener}]
      (sp/listen port port->bytes-stream)
-     {:port port :listener listener})))
+     (swap! neurosky-device merge device))))
 
-(defn stop! [neurosky]
-  (sp/close (:port neurosky))
-  (.stop (:listener neurosky)))
-
-;; (require '[nl-streamer.neurosky-reader :as nsr]
-;;          '[nl-streamer.serial-port :as sp]
-;;          '[clojure.java.io :as io])
-;; (def nsky (nsr/start! (sp/port-at 4)))
-;; (filter #(or ((complement contains?) % :raw-value)
-;;              (> (count (keys %)) 1))
-;;         @nsr/stats)
+(defn stop! []
+  (let [neurosky @neurosky-device]
+    (when (seq neurosky)
+      (sp/close (:port neurosky))
+      (.stop (:listener neurosky))
+      (reset! neurosky-device {}))))
