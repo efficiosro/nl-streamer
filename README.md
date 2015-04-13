@@ -10,6 +10,47 @@ package manager for their distribution. Windows users can consult
 [official page](https://www.java.com/en/download/help/download_options.xml#windows)
 2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.1.0.zip) and unpack it
 
+## Linux Instructions
+
+This example pressumes, that Linux distribution is Ubuntu and EEG headset
+is NeuroSky MindWave Mobile.
+
+First of all, go to bluetooth configuration in System Settings, enable it,
+and pair your headset (by default, PIN is 0000). After pairing, click on
+"MindWave Mobile" in "Devices" section. At the right panel you will see
+word "Address" following by XX:XX:XX:XX:XX:XX (actual device MAC address).
+Copy address (not the word itself).
+
+Install `rfcomm` utility:
+
+    $ sudo apt-get install rfcomm
+
+Edit file `/etc/bluetooth/rfcomm.conf`:
+
+    $ sudo nano /etc/bluetooth/rfcomm.conf
+
+It should looks like that:
+
+```
+rfcomm0 {
+        bind yes;
+        device XX:XX:XX:XX:XX:XX;
+        channel 1;
+        comment "Bluetooth device";
+}
+```
+
+Where `device XX:XX:XX:XX:XX:XX;` must contain actual MAC address from bluetooth's
+system settings page.
+
+Save file (press Control-O, then Enter) and exit (press Control-X).
+
+Restart bluetooth service:
+
+    $ sudo service bluetooth restart
+
+Now, follow the Usage instructions.
+
 ## Usage
 
 `nl-streamer` is terminal application for now, there is special helper shell
