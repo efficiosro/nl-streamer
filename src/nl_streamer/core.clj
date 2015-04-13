@@ -3,7 +3,8 @@
             [cheshire.core :as json]
             [nl-streamer.utils :as u]
             [nl-streamer.serial-port :as sp]
-            [nl-streamer.neurosky :as nsky])
+            [nl-streamer.neurosky :as nsky]
+            [nl-streamer.ui :as ui])
   (:use [clojure.string :only [join]]
         [clojure.java.io :only [as-file]])
   (:gen-class))
@@ -30,7 +31,8 @@
         ""
         "Commands are:"
         "  ports    - print list of available ports to connect and exit"
-        "  neurosky - connect and process data from NeuroSky headsets"]
+        "  neurosky - connect and process data from NeuroSky headsets"
+        "  ui - run nl-streamer in UI mode"]
        (join \newline)))
 
 (defn error-msg [errors]
@@ -51,11 +53,11 @@
     (exit 4 "Port of NeuroSky headset is not set!")))
 
 (defn setup-and-start! [opts start-fn! stop-fn!]
-  (u/setup! (:config opts))
-  (let [device (start-fn! opts)]
+  (when-let [device (start-fn! opts)]
     (.addShutdownHook (Runtime/getRuntime)
-                      (Thread. (fn [] (stop-fn! device))))
+                      (Thread. #(stop-fn!)))
     device))
+
 
 (defn -main [& args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-opts)]
@@ -63,7 +65,9 @@
       (:help options) (exit 0 (usage summary))
       (not= (count arguments) 1) (exit 1 (usage summary))
       errors (exit 2 (error-msg errors)))
+    (if (:config options) (u/setup! (:config options)))
     (case (first arguments)
+      "ui" (ui/show-window!)
       "ports" (show-ports)
       "neurosky" (setup-and-start! options start-neurosky! nsky/stop!)
       (exit 3 (usage summary)))))
