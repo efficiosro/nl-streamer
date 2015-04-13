@@ -21,6 +21,9 @@
   []
   (enumeration-seq (CommPortIdentifier/getPortIdentifiers)))
 
+(defn port-names []
+  (map #(.getName %) (port-ids)))
+
 (defn port-at
   "Returns the name of the serial port at idx."
   [idx]
