@@ -8,7 +8,7 @@
 available from scratch. Linux users can to search for Java using standard
 package manager for their distribution. Windows users can consult
 [official page](https://www.java.com/en/download/help/download_options.xml#windows)
-2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.1.0.zip) and unpack it
+2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.2.0.zip) and unpack it
 
 ## Linux Instructions
 
@@ -16,10 +16,10 @@ This example pressumes, that Linux distribution is Ubuntu and EEG headset
 is NeuroSky MindWave Mobile.
 
 First of all, go to bluetooth configuration in System Settings, enable it,
-and pair your headset (by default, PIN is 0000). After pairing, click on
+and pair your headset (PIN is 0000). After pairing, click on
 "MindWave Mobile" in "Devices" section. At the right panel you will see
-word "Address" following by XX:XX:XX:XX:XX:XX (actual device MAC address).
-Copy address (not the word itself).
+word "Address" following by XX:XX:XX:XX:XX:XX (actual device MAC address,
+where X could be digit or letter from A to F). Copy MAC address.
 
 Install `rfcomm` utility:
 
@@ -58,23 +58,24 @@ script, which ease usage on *nix platforms, like Linux or Mac OS X.
 
 Command, which runs application, must look like that:
 
-    $ nl-streamer.sh [command] [options]
+    $ ./nl-streamer [command] [options]
 
 NOTE: `$` sign is just command shell prompt and it can be different in your terminal.
 
 Open directory with unpacked application in terminal and run the next command:
 
-    $ nl-streamer.sh --help
+    $ ./nl-streamer --help
 
 #### Commands
 
+* `ui` - run application with user interface
 * `ports` - print list of available ports to connect and exit
 * `neurosky` - connect and process data from NeuroSky headsets
 
 #### Options
 
 * `-p, --port ID` - ID of the EEG headset port to read from
-* `-c, --config FILENAME` - set configuration file (JSON), default is
+* `-c, --config FILENAME` - set configuration file (JSON), defaults to
 `config.json` in current directory
 * `-h, --help` - displays help message
 
@@ -100,7 +101,7 @@ Configuration options:
 Start the streamer, which reads data from NeuroSky headset on port 4 and send
 it to the Neurolyzer service.
 
-    $ nl-streamer.sh neurosky -p 4
+    $ nl-streamer neurosky -p 4
 
 ## Contribute
 
