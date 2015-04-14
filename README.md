@@ -1,6 +1,7 @@
 # The Neurolyzer Streamer
 
-
+It is application, which parses input of EEG devices and sends data to
+the Neurolyzer service. Currently, only NeuroSky headsets are supported.
 
 ## Installation
 
