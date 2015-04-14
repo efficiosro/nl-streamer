@@ -42,7 +42,7 @@
            (ssc/label :id :status :text (:disconnected label-texts))
            (make-connect-button)]))
 
-(defn show-window! []
+(defn show-window! [_]
   (-> window
       (ssc/config! :content (make-window-content))
       (ssc/pack!)

@@ -39,10 +39,6 @@
   (str "The following errors occurred while parsing your command:\n\n"
        (join \newline errors)))
 
-(defn exit [status msg]
-  (println msg)
-  (System/exit status))
-
 (defn show-ports []
   (sp/list-ports)
   (System/exit 0))
@@ -50,24 +46,16 @@
 (defn start-neurosky! [opts]
   (if-let [port-id (:port-id opts)]
     (nsky/start! (sp/port-at port-id))
-    (exit 4 "Port of NeuroSky headset is not set!")))
-
-(defn setup-and-start! [opts start-fn! stop-fn!]
-  (when-let [device (start-fn! opts)]
-    (.addShutdownHook (Runtime/getRuntime)
-                      (Thread. #(stop-fn!)))
-    device))
-
+    (u/exit 4 "Port of NeuroSky headset is not set!")))
 
 (defn -main [& args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-opts)]
     (cond
-      (:help options) (exit 0 (usage summary))
-      (not= (count arguments) 1) (exit 1 (usage summary))
-      errors (exit 2 (error-msg errors)))
-    (if (:config options) (u/setup! (:config options)))
+      (:help options) (u/exit 0 (usage summary))
+      (not= (count arguments) 1) (u/exit 1 (usage summary))
+      errors (u/exit 2 (error-msg errors)))
     (case (first arguments)
-      "ui" (ui/show-window!)
+      "ui" (u/setup-and-start! options ui/show-window! nil)
       "ports" (show-ports)
-      "neurosky" (setup-and-start! options start-neurosky! nsky/stop!)
-      (exit 3 (usage summary)))))
+      "neurosky" (u/setup-and-start! options start-neurosky! nsky/stop!)
+      (u/exit 3 (usage summary)))))

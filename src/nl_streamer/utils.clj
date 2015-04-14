@@ -1,6 +1,5 @@
 (ns nl-streamer.utils
-  (:require [clojure.tools.logging :as log]
-            [cheshire.core :as json]
+  (:require [cheshire.core :as json]
             [clj-http.lite.client :as client]))
 
 (def ^:dynamic *options* {})
@@ -25,11 +24,6 @@
 (defn- set-options! [opts]
   (alter-var-root (var *options*) (constantly opts)))
 
-(defn setup!
-  "Reads JSON config from file, makes options and alter *options* variable."
-  [path-to-config]
-  (set-options! (config-file->options path-to-config)))
-
 (defn send-stat
   "Accepts a stat and sends it to the Neurolyzer service."
   [stat]
@@ -38,4 +32,23 @@
       (client/post (:url *options*)
                    (assoc (:http-opts *options*) :body body))
       (catch Exception ex
-        (log/error ex "Stat is not sent")))))
+        (println (str "Stat is not sent: " (.getMessage ex)))))))
+
+(defn exit [status msg]
+  (println msg)
+  (System/exit status))
+
+(defn setup!
+  "Reads JSON config from file, makes options and alter *options* variable."
+  [path-to-config]
+  (try
+    (set-options! (config-file->options path-to-config))
+    (catch Exception ex
+      (exit 5 (str "Cannot setup nl-streamer: " (.getMessage ex))))))
+
+(defn setup-and-start! [opts start-fn! stop-fn!]
+  (if (:config opts) (setup! (:config opts)))
+  (when-let [device (start-fn! opts)]
+    (if stop-fn! (.addShutdownHook (Runtime/getRuntime)
+                                   (Thread. #(stop-fn!))))
+    device))
