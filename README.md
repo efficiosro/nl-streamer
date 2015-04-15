@@ -9,7 +9,7 @@ the Neurolyzer service. Currently, only NeuroSky headsets are supported.
 available from scratch. Linux users can to search for Java using standard
 package manager for their distribution. Windows users can consult
 [official page](https://www.java.com/en/download/help/download_options.xml#windows)
-2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.2.1.zip) and unpack it
+2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.2.2.zip) and unpack it
 
 ## Linux Instructions
 
@@ -38,10 +38,14 @@ It should looks like that:
 
 ```
 rfcomm0 {
-        bind yes;
-        device XX:XX:XX:XX:XX:XX;
-        channel 1;
-        comment "Bluetooth device";
+  # if bind set to 'no', you need to connect to the port
+  # using rfcomm command, before NL Streamer utility launch:
+  #
+  #    $ sudo rfcomm connect rfcomm0
+  bind yes;
+  device XX:XX:XX:XX:XX:XX;
+  channel 1;
+  comment "Bluetooth device";
 }
 ```
 
@@ -53,6 +57,9 @@ Save file (press Control-O, then Enter) and exit (press Control-X).
 Restart bluetooth service:
 
     $ sudo service bluetooth restart
+
+**Important Note:** if you have some problem with steps, described above,
+please, consult answer to [this StackOverflow question](http://stackoverflow.com/questions/15799076/accessing-serial-data-from-neurosky-mindset-over-bluetooth-in-linux).
 
 Now, follow the Usage instructions.
 
