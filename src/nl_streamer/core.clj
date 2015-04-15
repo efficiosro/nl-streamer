@@ -4,9 +4,9 @@
             [nl-streamer.utils :as u]
             [nl-streamer.serial-port :as sp]
             [nl-streamer.neurosky :as nsky]
-            [nl-streamer.ui :as ui])
-  (:use [clojure.string :only [join]]
-        [clojure.java.io :only [as-file]])
+            [nl-streamer.ui :as ui]
+            [clojure.string :refer [join]]
+            [clojure.java.io :refer [as-file]])
   (:gen-class))
 
 (def cli-opts

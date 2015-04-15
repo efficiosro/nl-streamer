@@ -1,6 +1,6 @@
 (ns nl-streamer.ui
   (:require [seesaw.core :as ssc]
-            [nl-streamer.serial-port :as sp]
+            [nl-streamer.serial-port :refer [port-names]]
             [nl-streamer.neurosky :as nsky]))
 
 (def ^:private window (ssc/frame :title "Neurolyzer Streamer"))
@@ -37,7 +37,7 @@
 
 (defn- make-window-content []
   (ssc/flow-panel
-   :items [(ssc/combobox :id :ports :model (sp/port-names))
+   :items [(ssc/combobox :id :ports :model (port-names))
            :separator
            (ssc/label :id :status :text (:disconnected label-texts))
            (make-connect-button)]))

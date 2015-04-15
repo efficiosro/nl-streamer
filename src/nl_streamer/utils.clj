@@ -18,8 +18,9 @@
 (defn- config-file->options [path]
   (let [conf (json/parse-string (slurp path) true)
         url (make-url conf)
-        headers {"Authorization" (:token conf)}]
-    {:url url, :http-opts (assoc http-client-opts :headers headers)}))
+        headers {"Authorization" (:token conf)}
+        http-opts (assoc http-client-opts :headers headers)]
+    {:url url, :http-opts http-opts}))
 
 (defn- set-options! [opts]
   (alter-var-root (var *options*) (constantly opts)))
