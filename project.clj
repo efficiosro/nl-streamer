@@ -1,4 +1,4 @@
-(defproject nl-streamer "0.2.1"
+(defproject nl-streamer "0.2.2"
   :description "Stream utility to send EEG data to the Neurolyzer service."
   :url "http://efficio.cz"
   :license {:name "Eclipse Public License"
