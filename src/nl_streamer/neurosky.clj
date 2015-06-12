@@ -60,9 +60,9 @@
 (defn- contains-required-fields? [stat]
   (superset? (set (keys stat)) REQUIRED_FIELDS))
 
-(defn- store-and-maybe-send-stat
+(defn- store-and-maybe-consume-stat
   "It parses statistics, that were read from NeuroSky device's serial port,
-  updates appropriate stat record, and send previous stat if required."
+  updates appropriate stat record, and consumes previous stat if required."
   [stat]
   (if (and (seq stat)
            (= 0 (get stat :poor-signal 0)))
@@ -76,14 +76,16 @@
       (if-let [raw (:raw-value stat)]
         (swap! stats update-in [now-s :environment] conjv [now-ms raw]))
       (if (contains-required-fields? prev-stat)
-        (u/send-stat (assoc prev-stat :timestamp (- now-s 1)))))))
+        (let [consume-fn (or (:consume-fn @neurosky-device)
+                             u/send-stat-to-neurolyzer)]
+          (consume-fn (assoc prev-stat :timestamp (- now-s 1))))))))
 
 (defn- process-raw-value
   "Receives sequence of two bytes, which represents raw data value,
   transforms it to signed integer value and return."
   [bytes]
-  (let [hi-b (first bytes)
-        lo-b (second bytes)
+  (let [hi-b (bit-and 0xFF (first bytes))
+        lo-b (bit-and 0xFF (second bytes))
         v (+ (* hi-b 256) lo-b)
         raw-value (if (> v 32767) (- v 65536) v)]
     {:raw-value raw-value}))
@@ -133,6 +135,7 @@
         stat (condp = code
                RAW_VALUE (process-raw-value v-bytes)
                EEG_POWER (process-eeg-power v-bytes)
+               ASIC_EEG_POWER (process-eeg-power-asic v-bytes)
                {})]
     [stat (drop (+ v-len 2) payload)]))
 
@@ -163,7 +166,7 @@
         (if (seq payload)
           (let [[msg p] (read-next-value payload)]
             (recur (merge stat msg) p))
-          (store-and-maybe-send-stat stat))))))
+          (store-and-maybe-consume-stat stat))))))
 
 (defn- read-packet-from-stream
   "Reads packet of \"packet-length\" bytes from bytes stream, runs thread to
@@ -208,16 +211,19 @@
 
 (defn start!
   "Opens serial port on \"path\", reads data from it to the queue and launches
-  thread to read and process data from the queue. Returns map with port
-  and listener thread."
-  ([path] (start! path 57600))
-  ([path baud-rate]
+  thread to read and process data from the queue. Optionally, supports
+   \"consume-stat-fn\" to process ready stat.
+  Returns map with port and listener thread."
+  ([path] (start! path nil))
+  ([path consume-stat-fn]
    (reset! bytes-stream clojure.lang.PersistentQueue/EMPTY)
    (reset! stats {})
-   (let [port (sp/open path baud-rate)
+   (let [port (sp/open path 115200)
          _ (sp/write-int port (int 2)) ;; set baud rate to 57.6k
          listener (doto (Thread. process-bytes-stream) (.start))
-         device {:port port :listener listener}]
+         device {:port port
+                 :listener listener
+                 :consume-fn consume-stat-fn}]
      (sp/listen port port->bytes-stream)
      (swap! neurosky-device merge device))))
 

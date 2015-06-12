@@ -20,20 +20,20 @@
         url (make-url conf)
         headers {"Authorization" (:token conf)}
         http-opts (assoc http-client-opts :headers headers)]
-    {:url url, :http-opts http-opts}))
+    {:url url, :http-opts http-opts, :config conf}))
 
-(defn- set-options! [opts]
+(defn set-options! [opts]
   (alter-var-root (var *options*) (constantly opts)))
 
-(defn send-stat
+(defn send-stat-to-neurolyzer
   "Accepts a stat and sends it to the Neurolyzer service."
   [stat]
-  (let [body (json/generate-string {:stat stat})]
+  (let [body (json/generate-string {:stat stat})
+        http-opts (assoc (:http-opts *options*) :body body)]
     (try
-      (client/post (:url *options*)
-                   (assoc (:http-opts *options*) :body body))
+      (client/post (:url *options*) http-opts)
       (catch Exception ex
-        (println (str "Stat is not sent: " (.getMessage ex)))))))
+        (println (str "Stat was not sent to Neurolyzer: " (.getMessage ex)))))))
 
 (defn exit [status msg]
   (println msg)
@@ -53,3 +53,8 @@
     (if stop-fn! (.addShutdownHook (Runtime/getRuntime)
                                    (Thread. #(stop-fn!))))
     device))
+
+(defn str->int-safely [maybe-int-str]
+  (try
+    (Integer/parseInt maybe-int-str)
+    (catch Exception _ 0)))
