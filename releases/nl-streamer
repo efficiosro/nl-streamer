@@ -1,6 +1,6 @@
 #!/bin/bash
 
-os_name=$(uname -o | tr '[:upper:]' '[:lower:]')
+os_name=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m | tr '[:upper:]' '[:lower:]')
 
 if [ $arch != 'x86_64' ]; then
