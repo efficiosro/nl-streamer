@@ -1,6 +1,6 @@
-(ns ns-streamer.core-test
+(ns nl-streamer.core-test
   (:require [clojure.test :refer :all]
-            [ns-streamer.core :refer :all]))
+            [nl-streamer.core :refer :all]))
 
 (deftest a-test
   (testing "FIXME, I fail."
