@@ -54,7 +54,10 @@
                                    (Thread. #(stop-fn!))))
     device))
 
-(defn str->int-safely [maybe-int-str]
-  (try
-    (Integer/parseInt maybe-int-str)
-    (catch Exception _ 0)))
+(defn str->int-safely
+  ([maybe-int-str]
+   (str->int-safely maybe-int-str 0))
+  ([maybe-int-str fallback]
+   (try
+     (Integer/parseInt maybe-int-str)
+     (catch Exception _ fallback))))

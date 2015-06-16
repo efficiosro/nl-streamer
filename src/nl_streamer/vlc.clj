@@ -13,11 +13,17 @@
 
 (def ^:private vlc-config (atom {}))
 
+(def ^:private data-stream (atom nil))
+
+(def ^:private next-command-in (atom 0))
+
 (defn get-playlist [] @vlc-playlist)
 
 (defn set-playlist! [new-plist] (reset! vlc-playlist new-plist))
 
 (defn update-config! [new-config]
+  (reset! data-stream nil)
+  (reset! next-command-in (:command-inerval new-config))
   (swap! vlc-config merge new-config))
 
 (defn- make-url [host request opts]
@@ -50,16 +56,33 @@
             {}
             (:children playlist))))
 
-(defn- stat-complies-rule? [stat rule]
-  (let [metric-value (get stat (keyword (:metric rule)))
-        gte (str->int-safely (:gte rule))
+(defn- metric-complies-rule? [metric-value rule]
+  (let [gte (str->int-safely (:gte rule))
         lte (str->int-safely (:lte rule))]
     (and (>= metric-value gte) (<= metric-value lte))))
 
-(defn send-play-command [rules stat]
-  (println "Consume stat: " (select-keys stat [:attention :meditation]))
-  (let [win-rule (first (filter (partial stat-complies-rule? stat) rules))
-        win-id (get win-rule :id)]
-    (when (and win-id (not= win-id (:current (get-playlist))))
-      (send-request "status" :command "pl_play" :id win-id)
-      (swap! vlc-playlist assoc :current win-id))))
+(defn- process-stat->data-stream! [config stat]
+  (let [metric ((:stat-process-fn config) stat)]
+    (swap! data-stream #(take (:average-interval config) (cons metric %)))))
+
+(defn send-play-command
+  "Updates data-stream with appropriate metric, calculated from stat.
+  If next-command-in is 0 and length of data-stream is :average-interval,
+  calculate average metric level, find first playlist item, which rule complies,
+  and send play command with its ID."
+  [rules stat]
+  (let [conf @vlc-config
+        data (process-stat->data-stream! conf stat)]
+    (when (= (count data) (:average-interval conf))
+      (if (> @next-command-in 0)
+        (swap! next-command-in dec)
+        (do
+          (reset! next-command-in (dec (:command-inerval conf)))
+          (let [avg-metric (/ (reduce + data) (count data))
+                compl-fn (partial metric-complies-rule? avg-metric)
+                win-rule (first (filter compl-fn rules))
+                win-id (get win-rule :id)]
+            (println "Command! Metric: " (int avg-metric) ", ID: " win-id)
+            (when (and win-id (not= win-id (:current (get-playlist))))
+              (send-request "status" :command "pl_play" :id win-id)
+              (swap! vlc-playlist assoc :current win-id))))))))
