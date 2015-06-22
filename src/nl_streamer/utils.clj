@@ -15,9 +15,8 @@
        "/exercises/" (:exercise-id opts)
        "/statistics/add.json"))
 
-(defn- config-file->options [path]
-  (let [conf (json/parse-string (slurp path) true)
-        url (make-url conf)
+(defn config->options [conf]
+  (let [url (make-url conf)
         headers {"Authorization" (:token conf)}
         http-opts (assoc http-client-opts :headers headers)]
     {:url url, :http-opts http-opts, :config conf}))
@@ -43,12 +42,13 @@
   "Reads JSON config from file, makes options and alter *options* variable."
   [path-to-config]
   (try
-    (set-options! (config-file->options path-to-config))
+    (set-options!
+     (config->options (json/parse-string (slurp path-to-config) true)))
     (catch Exception ex
       (exit 5 (str "Cannot setup nl-streamer: " (.getMessage ex))))))
 
 (defn setup-and-start! [opts start-fn! stop-fn!]
-  (if (:config opts) (setup! (:config opts)))
+  (when (:config opts) (setup! (:config opts)))
   (when-let [device (start-fn! opts)]
     (if stop-fn! (.addShutdownHook (Runtime/getRuntime)
                                    (Thread. #(stop-fn!))))

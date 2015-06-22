@@ -1,12 +1,15 @@
 (ns nl-streamer.ui
   (:require [clojure.data :refer (diff)]
             [seesaw.core :as ssc]
+            [seesaw.graphics :as ssg]
+            [seesaw.border :refer (line-border)]
+            [seesaw.color :refer (color)]
             [nl-streamer.serial-port :refer (port-names)]
             [nl-streamer.neurosky :as nsky]
             [nl-streamer.utils :as u]
             [nl-streamer.vlc :as vlc]))
 
-(def ^:private window (ssc/frame :title "Neurolyzer Streamer"))
+(def ^:private window (ssc/frame :title "Neurolyzer Streamer" :width 500))
 
 (def ^:private nl-button-texts {:disconnected "Connect"
                                 :connected "Disconnect"})
@@ -20,9 +23,15 @@
 (def ^:private combo-enabled {:disconnected true
                               :connected false})
 
+(declare update-metric-bars!)
+
 (def ^:private backend->consume-fn
-  {"Neurolyzer" u/send-stat-to-neurolyzer
-   "VLC" vlc/send-play-command})
+  {"Neurolyzer" (fn [stat]
+                  (update-metric-bars! stat)
+                  (u/send-stat-to-neurolyzer stat))
+   "VLC" (fn [rules stat]
+           (update-metric-bars! stat)
+           (vlc/send-play-command rules stat))})
 
 (def ^:private stat-process-fns
   {"Attention" (fn [stat] (get stat :attention 0))
@@ -47,6 +56,29 @@
    "Med - Att" "Meditation - Attention interval lies between -100 and 100."
    "Att + Med" "Attention + Meditation interval lies between 0 and 200."})
 
+(defn update-metric-bars!
+  "Updates attention and meditation level bars and numeric representation."
+  [stat]
+  (let [attention (:attention stat)
+        meditation (:meditation stat)
+        draw-metric-level
+        (fn [grad-colors lvl c g]
+          (let [width (ssc/width c)
+                w (* width (/ lvl 100))
+                h (ssc/height c)
+                style {:background (ssg/linear-gradient
+                                    :end [width 0]
+                                    :colors grad-colors)}]
+            (ssg/draw g (ssg/rect 0 0 w h) style)))]
+    (ssc/config!
+     (ssc/select window [:#meditation-bar])
+     :paint (partial draw-metric-level ["#DFDFFF" "#0000FF"] meditation))
+    (ssc/config! (ssc/select window [:#meditation-level]) :text meditation)
+    (ssc/config!
+     (ssc/select window [:#attention-bar])
+     :paint (partial draw-metric-level ["#FFDFDF" "#FF0000"] attention))
+    (ssc/config! (ssc/select window [:#attention-level]) :text attention)))
+
 (defn alter-connection! [consume-fn]
   (if (= :disconnected (nsky/get-connection-status))
     (let [path (ssc/config (ssc/select window [:#ports]) :text)]
@@ -54,14 +86,29 @@
     (nsky/stop!)))
 
 (defn reconfig-ui! [status]
-  (let [btn (ssc/select window [:#connect])
+  (let [btn (ssc/select window [:#nl-connect])
         lbl (ssc/select window [:#status])
         combo (ssc/select window [:#ports])]
     (ssc/config! btn :text (get nl-button-texts status))
     (ssc/config! lbl :text (get label-texts status))
     (ssc/config! combo :enabled? (get combo-enabled status))))
 
+(defn read-nl-configuration []
+  (letfn [(select-all [keys->ids]
+            (reduce-kv
+             (fn [r k id]
+               (assoc r k (ssc/config (ssc/select window [id]) :text)))
+             {}
+             keys->ids))]
+    (select-all {:protocol :#nl-protocol
+                 :host :#nl-host
+                 :profile-id :#nl-profile-id
+                 :exercise-id :#nl-exercise-id
+                 :token :#nl-token})))
+
 (defn stream-button-click [_]
+  (update-metric-bars! {:attention 0, :meditation 0})
+  (u/set-options! (u/config->options (read-nl-configuration)))
   (alter-connection! (get backend->consume-fn "Neurolyzer"))
   (reconfig-ui! (nsky/get-connection-status)))
 
@@ -72,21 +119,40 @@
 
 (defn- make-neurolyzer-panel []
   (let [conf (:config u/*options*)]
-    (ssc/grid-panel
+    (ssc/form-panel
      :id :neurolyzer-panel
-     :columns 4
-     :items [(ssc/label :text "Protocol")
-             (ssc/combobox :id :nl-protocol :model ["HTTP" "HTTPS"])
-             (ssc/label :text "Host")
-             (ssc/text :id :nl-host :text (get conf :host ""))
-             (ssc/label :text "Profile ID")
-             (ssc/text :id :nl-profile-id :text (get conf :profile-id ""))
-             (ssc/label :text "Exercise ID")
-             (ssc/text :id :nl-exercise-id :text (get conf :exercise-id ""))
-             (ssc/label :text "Token")
-             (ssc/text :id :nl-token :text (get conf :token ""))
-             (ssc/label :id :status :text (:disconnected label-texts))
-             (make-stream-button)])))
+     :items [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
+              :gridx 0 :gridy 0]
+             [(ssc/label :text "Protocol" :halign :right)
+              :gridwidth 2 :weightx 1.0]
+             [(ssc/combobox :id :nl-protocol :model ["HTTP" "HTTPS"])
+              :gridx 2]
+             [(ssc/label :text "Host" :halign :right)
+              :gridx 4]
+             [(ssc/text :id :nl-host :text (get conf :host ""))
+              :gridx 6 :gridwidth 4]
+             [(ssc/label :text "Profile ID" :halign :right)
+              :gridx 10 :gridwidth 2]
+             [(ssc/text :id :nl-profile-id
+                        :columns 3
+                        :text (get conf :profile-id ""))
+              :gridx 12 :fill :horizontal]
+             [(ssc/label :text "Exercise ID" :halign :right)
+              :gridx 14]
+             [(ssc/text :id :nl-exercise-id
+                        :columns 3
+                        :text (get conf :exercise-id ""))
+              :gridx 16]
+             [(ssc/label :text "Token" :halign :right)
+              :grid :wrap :gridx 0 :gridwidth 2 :weightx 1.0]
+             [(ssc/text :id :nl-token :text (get conf :token ""))
+              :gridx 2 :gridwidth 8]
+             [(ssc/label :id :status
+                         :text (:disconnected label-texts)
+                         :halign :center)
+              :gridx 10 :gridwidth 4]
+             [(make-stream-button)
+              :gridx 14]])))
 
 (defn- generate-playlist-item-id [item-id & {:keys [prefix postfix]}]
   (keyword (str prefix "vlc-playlist-item-" item-id postfix)))
@@ -166,6 +232,7 @@
 
 (defn- vlc-start-button-click [evt]
   (update-vlc-config!)
+  (update-metric-bars! {:attention 0, :meditation 0})
   (let [rules (get-vlc-rules)]
     (when (seq rules)
       (alter-connection! (partial (get backend->consume-fn "VLC") rules))
@@ -225,13 +292,28 @@
     (ssc/config! vlc-panel :visible? (= "VLC" bknd))))
 
 (defn- make-main-panel []
-  (ssc/horizontal-panel
-   :items [(ssc/combobox :id :ports :model (port-names))
-           :separator
-           (ssc/label :text "Select the backend")
-           (ssc/combobox :id :interfaces
-                         :listen [:action handle-backend-selection]
-                         :model (keys backend->consume-fn))]))
+  (ssc/vertical-panel
+   :items
+   [(ssc/horizontal-panel
+     :items [(ssc/combobox :id :ports :model (port-names))
+             :separator
+             (ssc/label :text "Select the backend")
+             (ssc/combobox :id :interfaces
+                           :listen [:action handle-backend-selection]
+                           :model (keys backend->consume-fn))])
+    (ssc/form-panel
+     :items [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
+              :gridx 0 :gridy 0]
+             [(ssc/label :text "Meditation") :weightx 0.1]
+             [(ssc/label :id :meditation-bar :border (line-border) :text " ")
+              :grid :next :gridwidth 4 :weightx 0.85]
+             [(ssc/label :id :meditation-level :text "0")
+              :gridx 5 :weightx 0.05]
+             [(ssc/label :text "Attention") :grid :wrap :weightx 0.15]
+             [(ssc/label :id :attention-bar :border (line-border) :text " ")
+              :grid :next :gridwidth 4 :weightx 0.85]
+             [(ssc/label :id :attention-level :text "0")
+              :gridx 5 :weightx 0.05]])]))
 
 (defn- make-window-content []
   (ssc/vertical-panel
