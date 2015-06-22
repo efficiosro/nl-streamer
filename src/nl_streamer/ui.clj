@@ -129,7 +129,7 @@
               :gridx 2]
              [(ssc/label :text "Host" :halign :right)
               :gridx 4]
-             [(ssc/text :id :nl-host :text (get conf :host ""))
+             [(ssc/text :id :nl-host :columns 17 :text (get conf :host ""))
               :gridx 6 :gridwidth 4]
              [(ssc/label :text "Profile ID" :halign :right)
               :gridx 10 :gridwidth 2]

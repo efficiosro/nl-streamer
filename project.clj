@@ -1,4 +1,4 @@
-(defproject nl-streamer "0.3.0"
+(defproject nl-streamer "0.3.1"
   :description
   "Stream utility to send EEG data to the Neurolyzer service and control VLC."
   :url "http://efficio.cz"
