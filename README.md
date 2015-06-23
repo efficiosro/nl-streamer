@@ -9,7 +9,7 @@ the Neurolyzer service. Currently, only NeuroSky headsets are supported.
 available from scratch. Linux users can to search for Java using standard
 package manager for their distribution. Windows users can consult
 [official page](https://www.java.com/en/download/help/download_options.xml#windows)
-2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.3.1.zip) and unpack it
+2. Download the latest [release](https://github.com/efficiosro/nl-streamer/raw/master/releases/nl-streamer-0.3.2.zip) and unpack it
 
 ## Linux Instructions
 
