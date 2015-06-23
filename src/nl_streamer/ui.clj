@@ -2,7 +2,7 @@
   (:require [clojure.data :refer (diff)]
             [seesaw.core :as ssc]
             [seesaw.graphics :as ssg]
-            [seesaw.border :refer (line-border)]
+            [seesaw.border :refer (line-border to-border)]
             [seesaw.color :refer (color)]
             [nl-streamer.serial-port :refer (port-names)]
             [nl-streamer.neurosky :as nsky]
@@ -11,27 +11,36 @@
 
 (def ^:private window (ssc/frame :title "Neurolyzer Streamer" :width 500))
 
-(def ^:private nl-button-texts {:disconnected "Connect"
-                                :connected "Disconnect"})
-
-(def ^:private vlc-button-texts {:disconnected "Start control VLC"
-                                 :connected "Stop control VLC"})
-
-(def ^:private label-texts {:disconnected "Not Connected"
-                            :connected "Connected"})
-
-(def ^:private combo-enabled {:disconnected true
-                              :connected false})
+(def ^:private status-config
+  {:disconnected {:connect-button-text "Connect"
+                  :status-label-text "Not Connected"
+                  :device-combo-enabled? true}
+   :connected {:connect-button-text "Disconnect"
+               :status-label-text "Connected"
+               :device-combo-enabled? false}})
 
 (declare update-metric-bars!)
 
-(def ^:private backend->consume-fn
-  {"Neurolyzer" (fn [stat]
+(def ^:private backend->properties
+  {"Neurolyzer"
+   {:nl? true
+    :vlc? false
+    :consume-fn (fn [_ stat]
                   (update-metric-bars! stat)
-                  (u/send-stat-to-neurolyzer stat))
-   "VLC" (fn [rules stat]
-           (update-metric-bars! stat)
-           (vlc/send-play-command rules stat))})
+                  (u/send-stat-to-neurolyzer stat))}
+   "VLC"
+   {:nl? false
+    :vlc? true
+    :consume-fn (fn [rules stat]
+                  (update-metric-bars! stat)
+                  (vlc/send-play-command rules stat))}
+   "NL + VLC"
+   {:nl? true
+    :vlc? true
+    :consume-fn (fn [rules stat]
+                  (update-metric-bars! stat)
+                  (vlc/send-play-command rules stat)
+                  (u/send-stat-to-neurolyzer stat))}})
 
 (def ^:private stat-process-fns
   {"Attention" (fn [stat] (get stat :attention 0))
@@ -56,7 +65,12 @@
    "Med - Att" "Meditation - Attention interval lies between -100 and 100."
    "Att + Med" "Attention + Meditation interval lies between 0 and 200."})
 
-(defn update-metric-bars!
+(defn- get-backends-properties []
+  (get backend->properties
+       (ssc/config (ssc/select window [:#interfaces]) :text)
+       {}))
+
+(defn- update-metric-bars!
   "Updates attention and meditation level bars and numeric representation."
   [stat]
   (let [attention (:attention stat)
@@ -85,13 +99,13 @@
       (when path (nsky/start! path consume-fn)))
     (nsky/stop!)))
 
-(defn reconfig-ui! [status]
-  (let [btn (ssc/select window [:#nl-connect])
+(defn reconfig-ui! [btn status]
+  (let [conf (get status-config status {})
         lbl (ssc/select window [:#status])
         combo (ssc/select window [:#ports])]
-    (ssc/config! btn :text (get nl-button-texts status))
-    (ssc/config! lbl :text (get label-texts status))
-    (ssc/config! combo :enabled? (get combo-enabled status))))
+    (ssc/config! btn :text (:connect-button-text conf))
+    (ssc/config! lbl :text (:status-label-text conf))
+    (ssc/config! combo :enabled? (:device-combo-enabled? conf))))
 
 (defn read-nl-configuration []
   (letfn [(select-all [keys->ids]
@@ -106,21 +120,11 @@
                  :exercise-id :#nl-exercise-id
                  :token :#nl-token})))
 
-(defn stream-button-click [_]
-  (update-metric-bars! {:attention 0, :meditation 0})
-  (u/set-options! (u/config->options (read-nl-configuration)))
-  (alter-connection! (get backend->consume-fn "Neurolyzer"))
-  (reconfig-ui! (nsky/get-connection-status)))
-
-(defn make-stream-button []
-  (ssc/button :id :nl-connect
-              :text (:disconnected nl-button-texts)
-              :listen [:action stream-button-click]))
-
 (defn- make-neurolyzer-panel []
   (let [conf (:config u/*options*)]
     (ssc/form-panel
      :id :neurolyzer-panel
+     :border (to-border "Neurolyzer configuration")
      :items [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
               :gridx 0 :gridy 0]
              [(ssc/label :text "Protocol" :halign :right)
@@ -148,11 +152,10 @@
              [(ssc/text :id :nl-token :text (get conf :token ""))
               :gridx 2 :gridwidth 8]
              [(ssc/label :id :status
-                         :text (:disconnected label-texts)
+                         :text (:status-label-text
+                                (:disconnected status-config))
                          :halign :center)
-              :gridx 10 :gridwidth 4]
-             [(make-stream-button)
-              :gridx 14]])))
+              :gridx 10 :gridwidth 8]])))
 
 (defn- generate-playlist-item-id [item-id & {:keys [prefix postfix]}]
   (keyword (str prefix "vlc-playlist-item-" item-id postfix)))
@@ -205,7 +208,8 @@
     (when (seq to-add)
       #_(println "to-add: " to-add)
       (doall (map #(ssc/add! vlc-panel (apply make-playlist-item %)) to-add)))
-    (vlc/set-playlist! new-plist-items)))
+    (vlc/set-playlist! new-plist-items))
+  (ssc/pack! window))
 
 (defn- make-vlc-refresh-button []
   (ssc/button :id :refresh-vlc
@@ -230,20 +234,6 @@
   (let [items-ids (vals (:items (vlc/get-playlist)))]
     (filter map? (map #(get-vlc-item-rule %) items-ids))))
 
-(defn- vlc-start-button-click [evt]
-  (update-vlc-config!)
-  (update-metric-bars! {:attention 0, :meditation 0})
-  (let [rules (get-vlc-rules)]
-    (when (seq rules)
-      (alter-connection! (partial (get backend->consume-fn "VLC") rules))
-      (ssc/config! (.getSource evt)
-                   :text (get vlc-button-texts (nsky/get-connection-status))))))
-
-(defn- make-vlc-start-button []
-  (ssc/button :id :start-vlc
-              :text (:disconnected vlc-button-texts)
-              :listen [:action vlc-start-button-click]))
-
 (defn- handle-control-metric-selection [evt]
   (let [metric (ssc/config (.getSource evt) :text)
         help-label (ssc/select window [:#metric-help-msg])]
@@ -253,6 +243,7 @@
   (ssc/vertical-panel
    :id :vlc-panel
    :visible? false
+   :border (to-border "VLC configuration")
    :items [(ssc/form-panel
             :items
             [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
@@ -265,20 +256,24 @@
              [(ssc/text :id :vlc-password :columns 10)
               :gridx 5 :weightx 1.0 :gridwidth 3]
              [(make-vlc-refresh-button) :gridx 8 :gridwidth 2]
+             [(ssc/label :halign :right :text "Metric")
+              :grid :wrap :gridwidth 1]
              [(ssc/combobox :id :control-metric
                             :listen [:action handle-control-metric-selection]
                             :model (keys stat-process-fns))
-              :grid :wrap :weightx 1.0 :gridx 0 :gridwidth 2]
+              :gridx 1 :gridwidth 3 :weightx 1.0]
              [(ssc/label :text "Avg. per" :halign :right)
-              :gridx 2 :gridwidth 1]
+              :gridx 4 :gridwidth 1]
              [(ssc/text :id :average-interval :columns 4 :text "1")
-              :gridx 3 :gridwidth 1]
-             [(ssc/label :text "sec") :gridx 4]
-             [(ssc/label :text "Cmd. each" :halign :right) :gridx 5]
-             [(ssc/text :id :command-interval :columns 4 :text "1")
+              :gridx 5 :gridwidth 1]
+             [(ssc/label :text "sec")
               :gridx 6 :gridwidth 1]
-             [(ssc/label :text "sec") :gridx 7]
-             [(make-vlc-start-button) :gridx 8 :gridwidth 2]
+             [(ssc/label :text "Cmd. each" :halign :right)
+              :gridx 7 :gridwidth 1]
+             [(ssc/text :id :command-interval :columns 4 :text "1")
+              :gridx 8 :gridwidth 1]
+             [(ssc/label :text "sec")
+              :gridx 9 :gridwidth 1]
              [(ssc/label :id :metric-help-msg
                          :halign :center
                          :text (get metric-help-messages "Attention"))
@@ -287,33 +282,56 @@
 (defn- handle-backend-selection [evt]
   (let [bknd (ssc/text (.getSource evt))
         neurolyzer-panel (ssc/select window [:#neurolyzer-panel])
-        vlc-panel (ssc/select window [:#vlc-panel])]
-    (ssc/config! neurolyzer-panel :visible? (= "Neurolyzer" bknd))
-    (ssc/config! vlc-panel :visible? (= "VLC" bknd))))
+        vlc-panel (ssc/select window [:#vlc-panel])
+        {:keys [nl? vlc?]} (get-backends-properties)]
+    (ssc/config! neurolyzer-panel :visible? nl?)
+    (ssc/config! vlc-panel :visible? vlc?)
+    (ssc/pack! window)))
+
+(defn- handle-connect-button-click [evt]
+  (update-metric-bars! {:attention 0, :meditation 0})
+  (let [{:keys [nl? vlc? consume-fn]} (get-backends-properties)
+        vlc-rules (when vlc? (get-vlc-rules))
+        consume-stat-fn (partial consume-fn vlc-rules)]
+    (when nl?
+      (u/set-options! (u/config->options (read-nl-configuration))))
+    (when vlc? (update-vlc-config!))
+    (alter-connection! consume-stat-fn)
+    (reconfig-ui! (.getSource evt) (nsky/get-connection-status))))
 
 (defn- make-main-panel []
   (ssc/vertical-panel
    :items
-   [(ssc/horizontal-panel
-     :items [(ssc/combobox :id :ports :model (port-names))
-             :separator
-             (ssc/label :text "Select the backend")
-             (ssc/combobox :id :interfaces
-                           :listen [:action handle-backend-selection]
-                           :model (keys backend->consume-fn))])
+   [(ssc/form-panel
+     :items [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
+              :gridx 0 :gridy 0]
+             [(ssc/label :halign :right :text "Device")
+              :gridwidth 2 :weightx 1/8]
+             [(ssc/combobox :id :ports :model (port-names))
+              :gridx 2 :weightx 3/8 :gridwidth 6]
+             [(ssc/label :halign :right :text "Backend")
+              :gridx 8 :gridwidth 2 :weightx 1/8]
+             [(ssc/combobox :id :interfaces
+                            :listen [:action handle-backend-selection]
+                            :model (keys backend->properties))
+              :gridx 10 :gridwidth 3 :weightx 3/16]
+             [(ssc/button :id :connect
+                          :text "Connect"
+                          :listen [:action handle-connect-button-click])
+              :gridx 13 :gridwidth 3 :weightx 3/16]])
     (ssc/form-panel
      :items [[nil :fill :horizontal :insets (java.awt.Insets. 2 5 0 5)
               :gridx 0 :gridy 0]
              [(ssc/label :text "Meditation") :weightx 0.1]
              [(ssc/label :id :meditation-bar :border (line-border) :text " ")
               :grid :next :gridwidth 4 :weightx 0.85]
-             [(ssc/label :id :meditation-level :text "0")
-              :gridx 5 :weightx 0.05]
+             [(ssc/label :id :meditation-level :halign :center :text "0")
+              :gridx 5 :gridwidth 1 :weightx 0.05]
              [(ssc/label :text "Attention") :grid :wrap :weightx 0.15]
              [(ssc/label :id :attention-bar :border (line-border) :text " ")
               :grid :next :gridwidth 4 :weightx 0.85]
-             [(ssc/label :id :attention-level :text "0")
-              :gridx 5 :weightx 0.05]])]))
+             [(ssc/label :id :attention-level :halign :center :text "0")
+              :gridx 5 :gridwidth 1 :weightx 0.05]])]))
 
 (defn- make-window-content []
   (ssc/vertical-panel
