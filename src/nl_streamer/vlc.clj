@@ -73,6 +73,7 @@
   [rules stat]
   (let [conf @vlc-config
         data (process-stat->data-stream! conf stat)]
+    #_(println "Last data:" data)
     (when (= (count data) (:average-interval conf))
       (if (> @next-command-in 0)
         (swap! next-command-in dec)
@@ -82,7 +83,7 @@
                 compl-fn (partial metric-complies-rule? avg-metric)
                 win-rule (first (filter compl-fn rules))
                 win-id (get win-rule :id)]
-            (println "Command! Metric: " (int avg-metric) ", ID: " win-id)
+            #_(println "Command! Metric: " (int avg-metric) ", ID: " win-id)
             (when (and win-id (not= win-id (:current (get-playlist))))
               (send-request "status" :command "pl_play" :id win-id)
               (swap! vlc-playlist assoc :current win-id))))))))

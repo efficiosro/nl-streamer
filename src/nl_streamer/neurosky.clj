@@ -1,5 +1,6 @@
 (ns nl-streamer.neurosky
   (:require [clojure.java.io :as io]
+            [clojure.core.async :as async :refer [>!! <!! go-loop chan alts!]]
             [nl-streamer.serial-port :as sp]
             [nl-streamer.utils :as u]
             [clojure.set :refer [superset?]])
@@ -195,13 +196,12 @@
       (+ PACKET_OVERHEAD payload-len))))
 
 (defn- process-bytes-stream []
-  (loop [s @bytes-stream]
+  (let [s @bytes-stream]
     (if (> HEADER_LENGTH (count s))
       (Thread/sleep 15)
       (if-let [p-len (get-packet-length s)]
         (read-packet-from-stream p-len)
-        (swap! bytes-stream pop)))
-    (recur @bytes-stream)))
+        (swap! bytes-stream pop)))))
 
 (defn- port->bytes-stream [in-stream]
   (let [input-array (byte-array (.available in-stream))
@@ -211,18 +211,25 @@
 
 (defn start!
   "Opens serial port on \"path\", reads data from it to the queue and launches
-  thread to read and process data from the queue. Optionally, supports
+  go block to read and process data from the queue. Optionally, supports
    \"consume-stat-fn\" to process ready stat.
-  Returns map with port and listener thread."
+  Returns map with port and asynchronous communication channels."
   ([path] (start! path nil))
   ([path consume-stat-fn]
    (reset! bytes-stream clojure.lang.PersistentQueue/EMPTY)
    (reset! stats {})
    (let [port (sp/open path 115200)
          _ (sp/write-int port (int 2)) ;; set baud rate to 57.6k
-         listener (doto (Thread. process-bytes-stream) (.start))
+         stop-c (chan 1)
+         done-c (go-loop [[stop? _] (alts! [stop-c] :default false)]
+                  (if-not stop?
+                    (do
+                      (process-bytes-stream)
+                      (recur (alts! [stop-c] :default false)))
+                    "neurosky data processing has stopped"))
          device {:port port
-                 :listener listener
+                 :done-chan done-c
+                 :stop-chan stop-c
                  :consume-fn consume-stat-fn}]
      (sp/listen port port->bytes-stream)
      (swap! neurosky-device merge device))))
@@ -231,5 +238,6 @@
   (let [neurosky @neurosky-device]
     (when (seq neurosky)
       (sp/close (:port neurosky))
-      (.stop (:listener neurosky))
+      (>!! (:stop-chan neurosky) true)
+      (<!! (:done-chan neurosky))
       (reset! neurosky-device {}))))

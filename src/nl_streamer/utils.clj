@@ -50,8 +50,8 @@
 (defn setup-and-start! [opts start-fn! stop-fn!]
   (when (:config opts) (setup! (:config opts)))
   (when-let [device (start-fn! opts)]
-    (if stop-fn! (.addShutdownHook (Runtime/getRuntime)
-                                   (Thread. #(stop-fn!))))
+    (when stop-fn!
+      (.addShutdownHook (Runtime/getRuntime) (Thread. #(stop-fn!))))
     device))
 
 (defn str->int-safely
